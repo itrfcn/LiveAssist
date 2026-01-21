@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员仪表板</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background-color: #1890ff;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+        }
+        
+        .header a {
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .nav {
+            background-color: #fff;
+            padding: 10px 20px;
+            border-bottom: 1px solid #e8e8e8;
+            display: flex;
+            gap: 20px;
+        }
+        
+        .nav a {
+            text-decoration: none;
+            color: #333;
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 4px;
+        }
+        
+        .nav a:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .container {
+            padding: 20px;
+        }
+        
+        .user-list {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+            overflow: hidden;
+            overflow-x: auto;
+        }
+        
+        .user-list table {
+            width: 100%;
+            min-width: 800px;
+            border-collapse: collapse;
+        }
+        
+        .user-list th,
+        .user-list td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e8e8e8;
+        }
+        
+        /* 调整列宽度 */
+        .user-list th:nth-child(4),
+        .user-list td:nth-child(4) {
+            /* 用户设备列 */
+            width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .user-list th:nth-child(6),
+        .user-list td:nth-child(6) {
+            /* 备注列 */
+            width: 300px;
+            white-space: normal;
+            word-break: break-word;
+        }
+        
+        .user-list th {
+            background-color: #fafafa;
+            font-weight: 600;
+            font-size: 14px;
+            color: #666;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .user-list td {
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .user-list tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .user-list a {
+            color: #1890ff;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .user-list a:hover {
+            text-decoration: underline;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                padding: 10px 15px;
+            }
+            
+            .header h1 {
+                font-size: 16px;
+            }
+            
+            .nav {
+                padding: 8px 15px;
+                gap: 10px;
+            }
+            
+            .nav a {
+                padding: 6px 12px;
+                font-size: 13px;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+            
+            .user-list th,
+            .user-list td {
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>客服系统管理</h1>
+        <a href="/admin/logout">退出登录</a>
+    </div>
+    
+    <div class="nav">
+        <a href="/admin/dashboard">用户列表</a>
+        <a href="/admin/auto_replies">关键词自动回复</a>
+        <a href="/admin/common_questions">常见问题设置</a>
+        <a href="/admin/welcome_messages">打招呼语句</a>
+        <a href="/admin/settings">系统设置</a>
+    </div>
+    
+    <div class="container">
+        <div class="user-list">
+            <table>
+                <thead>
+                    <tr>
+                        <th>用户ID</th>
+                        <th>别名</th>
+                        <th>IP地址</th>
+                        <th>用户设备</th>
+                        <th>设备类型</th>
+                        <th>备注</th>
+                        <th>最新消息时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in user_data %}
+                    {% set user = item.user %}
+                    {% set unread_count = item.unread_count %}
+                    <tr>
+                        <td>{{ user.user_id }}</td>
+                        <td>{{ user.alias or '-' }}</td>
+                        <td>{{ user.ip_address }}</td>
+                        <td style="cursor: pointer;" title="{{ user.user_agent }}" onclick="alert('{{ user.user_agent }}')">{{ user.user_agent[:50] }}{% if user.user_agent|length > 50 %}...{% endif %}</td>
+                        <td>{{ item.device_type }}</td>
+                        <td>{{ (user.remark[:30] if user.remark else '-') }}{% if user.remark and user.remark|length > 30 %}...{% endif %}</td>
+                        <td>{{ item.latest_message_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>
+                            <a href="/admin/chat/{{ user.user_id }}">查看聊天 {% if unread_count > 0 %}<span style="color: red; font-weight: bold;">({{ unread_count }})</span>{% endif %}</a> | 
+                            <a href="javascript:void(0);" data-user-id="{{ user.user_id }}" data-alias="{{ user.alias }}" data-remark="{{ user.remark }}" onclick="editUserInfoFromElement(this)">编辑</a> | 
+                            <a href="/admin/delete_user/{{ user.user_id }}" onclick="return confirm('确定要删除该用户的所有聊天记录吗？');">删除会话</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- 编辑用户信息模态框 -->
+    <div id="editModal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgb(0,0,0); background-color: rgba(0,0,0,0.4);">
+        <div style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 400px; border-radius: 8px;">
+            <h2>编辑用户信息</h2>
+            <input type="hidden" id="editUserId">
+            <div style="margin: 15px 0;">
+                <label>别名：</label>
+                <input type="text" id="editAlias" style="width: 100%; padding: 8px;">
+            </div>
+            <div style="margin: 15px 0;">
+                <label>备注：</label>
+                <textarea id="editRemark" style="width: 100%; padding: 8px; height: 100px;"></textarea>
+            </div>
+            <div style="text-align: right; margin-top: 20px;">
+                <button onclick="saveUserInfo()" style="padding: 8px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">保存</button>
+                <button onclick="closeEditModal()" style="padding: 8px 16px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 从元素数据属性编辑用户信息
+        function editUserInfoFromElement(element) {
+            const userId = element.getAttribute('data-user-id');
+            const alias = element.getAttribute('data-alias') || '';
+            const remark = element.getAttribute('data-remark') || '';
+            document.getElementById('editUserId').value = userId;
+            document.getElementById('editAlias').value = alias;
+            document.getElementById('editRemark').value = remark;
+            document.getElementById('editModal').style.display = 'block';
+        }
+        
+        // 编辑用户信息
+        function editUserInfo(userId, alias, remark) {
+            document.getElementById('editUserId').value = userId;
+            document.getElementById('editAlias').value = alias || '';
+            document.getElementById('editRemark').value = remark || '';
+            document.getElementById('editModal').style.display = 'block';
+        }
+        
+        // 关闭编辑模态框
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+        
+        // 保存用户信息
+        function saveUserInfo() {
+            const userId = document.getElementById('editUserId').value;
+            const alias = document.getElementById('editAlias').value;
+            const remark = document.getElementById('editRemark').value;
+            
+            fetch('/admin/update_user_info', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ user_id: userId, alias: alias, remark: remark })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('保存成功！');
+                    closeEditModal();
+                    refreshUserList();
+                } else {
+                    alert('保存失败：' + (data.message || '未知错误'));
+                }
+            });
+        }
+        
+        // HTML转义函数，防止XSS攻击
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // 自动刷新用户列表和未读消息计数
+        function refreshUserList() {
+            // 发送请求获取最新的用户数据
+            fetch('/admin/dashboard_data')
+                .then(response => response.json())
+                .then(data => {
+                    const tbody = document.querySelector('.user-list tbody');
+                    if (tbody) {
+                        // 清空现有的用户列表
+                        tbody.innerHTML = '';
+                        
+                        // 重新添加用户数据
+                        data.forEach(item => {
+                            const user = item.user;
+                            const unread_count = item.unread_count;
+                            
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td>${escapeHtml(user.user_id)}</td>
+                                <td>${escapeHtml(user.alias) || '-'}</td>
+                                <td>${escapeHtml(user.ip_address)}</td>
+                                <td style="cursor: pointer;" title="${escapeHtml(user.user_agent)}" onclick="alert('${escapeHtml(user.user_agent)}')">${escapeHtml(user.user_agent.substring(0, 50))}${user.user_agent.length > 50 ? '...' : ''}</td>
+                                <td>${escapeHtml(user.device_type)}</td>
+                                <td>${user.remark ? escapeHtml(user.remark.substring(0, 30)) : '-'}${user.remark && user.remark.length > 30 ? '...' : ''}</td>
+                                <td>${escapeHtml(user.latest_message_time)}</td>
+                                <td>
+                                    <a href="/admin/chat/${escapeHtml(user.user_id)}">查看聊天 ${unread_count > 0 ? '<span style="color: red; font-weight: bold;">(' + escapeHtml(unread_count) + ')</span>' : ''}</a> | 
+                                    <a href="javascript:void(0);" data-user-id="${escapeHtml(user.user_id)}" data-alias="${escapeHtml(user.alias)}" data-remark="${escapeHtml(user.remark)}" onclick="editUserInfoFromElement(this)">编辑</a> | 
+                                    <a href="/admin/delete_user/${escapeHtml(user.user_id)}" onclick="return confirm('确定要删除该用户的所有聊天记录吗？');">删除会话</a>
+                                </td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error refreshing user list:', error);
+                });
+        }
+        
+        // 页面加载时刷新一次
+        window.onload = function() {
+            refreshUserList();
+            // 每3秒自动刷新一次
+            setInterval(refreshUserList, 3000);
+        };
+    </script>
+</body>
+</html>

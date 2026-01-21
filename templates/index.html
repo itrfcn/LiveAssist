@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>在线客服</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .chat-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: #fff;
+        }
+        
+        .chat-header {
+            background-color: #1890ff;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .message {
+            max-width: 80%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+        
+        .user-message {
+            align-self: flex-end;
+            background-color: #e6f7ff;
+            color: #333;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .admin-message {
+            align-self: flex-start;
+            background-color: #f0f0f0;
+            color: #333;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message-time {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+            text-align: right;
+        }
+        
+        .admin-message .message-time {
+            text-align: left;
+        }
+        
+        .chat-input {
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            background-color: #fff;
+            border-top: 1px solid #e8e8e8;
+            flex-wrap: wrap;
+        }
+        
+        .chat-input input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid #d9d9d9;
+            border-radius: 20px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+        
+        .chat-input button {
+            padding: 0 20px;
+            background-color: #1890ff;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .chat-input button:hover {
+            background-color: #40a9ff;
+        }
+        
+        .upload-buttons {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+        
+        .upload-buttons input[type="file"] {
+            display: none;
+        }
+        
+        .upload-buttons label {
+            padding: 6px 12px;
+            background-color: #f0f0f0;
+            color: #333;
+            border-radius: 16px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        
+        .upload-buttons label:hover {
+            background-color: #e0e0e0;
+        }
+        
+        .image-message img {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+        }
+        
+        .video-message video {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+        }
+        
+        @media (max-width: 768px) {
+            .message {
+                max-width: 90%;
+            }
+            
+            .chat-header {
+                padding: 12px;
+                font-size: 16px;
+            }
+            
+            .chat-messages {
+                padding: 10px;
+            }
+            
+            .chat-input {
+                padding: 8px;
+            }
+            
+            .chat-input input {
+                padding: 8px 12px;
+            }
+            
+            .chat-input button {
+                padding: 0 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">在线客服</div>
+        
+        <div class="chat-messages" id="chat-messages">
+            <!-- 消息会通过JavaScript动态添加 -->
+        </div>
+        
+        <div class="chat-input">
+            <input type="text" id="message-input" placeholder="请输入消息...">
+            <button id="send-button">发送</button>
+            {% if allow_images or allow_videos %}
+            <div class="upload-buttons">
+                {% if allow_images %}
+                <label for="image-upload">📷 图片</label>
+                <input type="file" id="image-upload" accept="image/*">
+                {% endif %}
+                {% if allow_videos %}
+                <label for="video-upload">🎬 视频</label>
+                <input type="file" id="video-upload" accept="video/*">
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <script>
+        const user_id = '{{ user_id }}';
+        const common_questions = {{ common_questions|tojson }};
+        
+        // 加载消息
+        function loadMessages() {
+            fetch('/get_messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ user_id: user_id })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const messagesContainer = document.getElementById('chat-messages');
+                
+                // 获取当前已有的消息ID
+                const existingMessageTimes = [];
+                const messageDivs = messagesContainer.querySelectorAll('.message:not(.system-message)');
+                messageDivs.forEach(div => {
+                    const timeElement = div.querySelector('.message-time');
+                    if (timeElement) {
+                        existingMessageTimes.push(timeElement.textContent);
+                    }
+                });
+                
+                // HTML转义函数，防止XSS攻击
+                function escapeHtml(text) {
+                    const div = document.createElement('div');
+                    div.textContent = text;
+                    return div.innerHTML;
+                }
+                
+                // 处理文本内容，支持链接复制和颜色设置
+                function processTextContent(text) {
+                    // 先进行HTML转义，防止XSS攻击
+                    let processedText = escapeHtml(text);
+                    
+                    // 处理换行符，将\n替换为<br>
+                    processedText = processedText.replace(/\n/g, '<br>');
+                    
+                    // 处理加粗标记，格式：**文本**
+                    processedText = processedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    
+                    // 处理颜色标记，格式：#color#文本#
+                    const colorRegex = /#(red|green|blue|yellow|purple|orange|black|white|gray|grey|pink|brown|cyan|magenta)#([^#]+)#/g;
+                    processedText = processedText.replace(colorRegex, '<span style="color: $1;">$2</span>');
+                    
+                    // 处理链接，添加点击复制功能
+                    const urlRegex = /(https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=.]+)/g;
+                    processedText = processedText.replace(urlRegex, '<span style="color: blue; text-decoration: underline; cursor: pointer;" onclick="copyToClipboard(this.textContent)">$1</span>');
+                    
+                    return processedText;
+                }
+                
+                // 复制到剪贴板
+                window.copyToClipboard = function(text) {
+                    navigator.clipboard.writeText(text).then(function() {
+                        // 显示复制成功提示
+                        const tooltip = document.createElement('div');
+                        tooltip.style.position = 'fixed';
+                        tooltip.style.top = '20px';
+                        tooltip.style.right = '20px';
+                        tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+                        tooltip.style.color = 'white';
+                        tooltip.style.padding = '10px 15px';
+                        tooltip.style.borderRadius = '4px';
+                        tooltip.style.zIndex = '10000';
+                        tooltip.textContent = '已复制到剪贴板！';
+                        document.body.appendChild(tooltip);
+                        
+                        // 2秒后移除提示
+                        setTimeout(function() {
+                            tooltip.style.opacity = '0';
+                            tooltip.style.transition = 'opacity 0.5s';
+                            setTimeout(function() {
+                                document.body.removeChild(tooltip);
+                            }, 500);
+                        }, 2000);
+                    });
+                };
+                
+                // 检查是否有新消息
+                let hasNewMessages = false;
+                
+                // 保存系统消息（排除常见问题信息框）
+                const systemMessages = [];
+                const children = messagesContainer.children;
+                for (let i = 0; i < children.length; i++) {
+                    const child = children[i];
+                    // 识别系统消息（通过system-message类），但排除常见问题信息框
+                    if (child.classList.contains('system-message') && !child.innerHTML.includes('常见问题：')) {
+                        systemMessages.push(child.cloneNode(true));
+                    }
+                }
+                
+                // 移除现有的系统消息，只保留普通消息
+                const systemMessageElements = messagesContainer.querySelectorAll('.system-message');
+                systemMessageElements.forEach(element => {
+                    element.remove();
+                });
+                
+                // 添加新消息
+                data.forEach(msg => {
+                    // 检查消息是否已存在
+                    if (!existingMessageTimes.includes(msg.created_at)) {
+                        hasNewMessages = true;
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = msg.is_admin ? 'message admin-message' : 'message user-message';
+                        
+                        let contentHtml = '';
+                        if (msg.message_type === 'text') {
+                            const processedContent = processTextContent(msg.content);
+                            contentHtml = `<div>${processedContent}</div>`;
+                        } else if (msg.message_type === 'image') {
+                            contentHtml = `<div class="image-message"><img src="/uploads/${msg.content}" alt="Image"></div>`;
+                        } else if (msg.message_type === 'video') {
+                            contentHtml = `<div class="video-message"><video controls><source src="/uploads/${msg.content}" type="video/mp4">Your browser does not support the video tag.</video></div>`;
+                        }
+                        
+                        messageDiv.innerHTML = `
+                            ${contentHtml}
+                            <div class="message-time">${msg.created_at}</div>
+                        `;
+                        messagesContainer.appendChild(messageDiv);
+                    }
+                });
+                
+                // 重新添加系统消息（位于所有消息的最后）
+                systemMessages.forEach(msg => {
+                    const clonedMsg = msg.cloneNode(true);
+                    // 重新绑定点击事件
+                    if (clonedMsg.classList.contains('system-message')) {
+                        // 检查是否包含可点击的问题项
+                        const questionItems = clonedMsg.querySelectorAll('[data-question]');
+                        questionItems.forEach(item => {
+                            item.onclick = function() {
+                                const question = this.getAttribute('data-question');
+                                sendMessage(question);
+                                // 模拟发送回答
+                                setTimeout(() => {
+                                    loadMessages();
+                                }, 500);
+                            };
+                        });
+                    }
+                    messagesContainer.appendChild(clonedMsg);
+                });
+                
+                // 重新添加常见问题信息框（位于所有消息的最后）
+                initCommonQuestions();
+                
+                // 如果有新消息，滚动到底部
+                if (hasNewMessages) {
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+            });
+        }
+        
+        // 发送消息
+        function sendMessage(content, messageType = 'text') {
+            fetch('/send_message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ user_id: user_id, content: content, message_type: messageType })
+            })
+            .then(response => response.json())
+            .then(() => {
+                loadMessages();
+            });
+        }
+        
+        // 上传文件
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    sendMessage(data.filename, data.message_type);
+                } else {
+                    alert(data.message);
+                }
+            });
+        }
+        
+        // 绑定文件上传事件
+        document.addEventListener('DOMContentLoaded', function() {
+            const imageUpload = document.getElementById('image-upload');
+            if (imageUpload) {
+                imageUpload.addEventListener('change', function(e) {
+                    if (e.target.files && e.target.files[0]) {
+                        uploadFile(e.target.files[0]);
+                        e.target.value = ''; // 重置文件输入
+                    }
+                });
+            }
+            
+            const videoUpload = document.getElementById('video-upload');
+            if (videoUpload) {
+                videoUpload.addEventListener('change', function(e) {
+                    if (e.target.files && e.target.files[0]) {
+                        uploadFile(e.target.files[0]);
+                        e.target.value = ''; // 重置文件输入
+                    }
+                });
+            }
+        });
+        
+        // 初始化常见问题
+        function initCommonQuestions() {
+            const messagesContainer = document.getElementById('chat-messages');
+            
+            // 移除已存在的常见问题信息框
+            const existingQuestionBoxes = messagesContainer.querySelectorAll('.system-message');
+            existingQuestionBoxes.forEach(box => {
+                if (box.innerHTML.includes('常见问题：')) {
+                    box.remove();
+                }
+            });
+            
+            // 添加常见问题作为一个消息框
+            if (common_questions.length > 0) {
+                const questionsMessage = document.createElement('div');
+                questionsMessage.className = 'message admin-message system-message';
+                questionsMessage.style.backgroundColor = '#f6ffed';
+                
+                let questionsHtml = '<div>常见问题：</div>';
+                common_questions.forEach((q, index) => {
+                    questionsHtml += `
+                        <div style="margin-top: 8px; padding: 8px; background-color: #fff; border-radius: 8px; cursor: pointer;" data-question="${q.question}">
+                            ${index + 1}. ${q.question}
+                        </div>
+                    `;
+                });
+                
+                questionsMessage.innerHTML = questionsHtml;
+                messagesContainer.appendChild(questionsMessage);
+                
+                // 绑定点击事件
+                const questionItems = questionsMessage.querySelectorAll('[data-question]');
+                questionItems.forEach(item => {
+                    item.onclick = function() {
+                        const question = this.getAttribute('data-question');
+                        sendMessage(question);
+                        // 模拟发送回答
+                        setTimeout(() => {
+                            loadMessages();
+                        }, 500);
+                    };
+                });
+            }
+        }
+        
+        // 事件监听
+        document.getElementById('send-button').addEventListener('click', function() {
+            const input = document.getElementById('message-input');
+            const content = input.value.trim();
+            if (content) {
+                sendMessage(content);
+                input.value = '';
+            }
+        });
+        
+        document.getElementById('message-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const content = this.value.trim();
+                if (content) {
+                    sendMessage(content);
+                    this.value = '';
+                }
+            }
+        });
+        
+        // 初始化
+        window.onload = function() {
+            // 先加载服务器消息（包括管理员设置的打招呼语句）
+            loadMessages();
+            // 然后添加常见问题（位于打招呼语句下面）
+            setTimeout(initCommonQuestions, 500);
+        };
+        
+        // 定时刷新消息
+        setInterval(loadMessages, 3000);
+    </script>
+</body>
+</html>

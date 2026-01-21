@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>常见问题设置</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background-color: #1890ff;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+        }
+        
+        .header a {
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .nav {
+            background-color: #fff;
+            padding: 10px 20px;
+            border-bottom: 1px solid #e8e8e8;
+            display: flex;
+            gap: 20px;
+        }
+        
+        .nav a {
+            text-decoration: none;
+            color: #333;
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 4px;
+        }
+        
+        .nav a:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .container {
+            padding: 20px;
+        }
+        
+        .add-question {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+            margin-bottom: 20px;
+        }
+        
+        .add-question h2 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 16px;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group textarea {
+            resize: none;
+            height: 100px;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #1890ff;
+            box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+        }
+        
+        .add-button {
+            padding: 10px 20px;
+            background-color: #1890ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .add-button:hover {
+            background-color: #40a9ff;
+        }
+        
+        .question-list {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+            overflow: hidden;
+        }
+        
+        .question-list table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .question-list th,
+        .question-list td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e8e8e8;
+        }
+        
+        .question-list th {
+            background-color: #fafafa;
+            font-weight: 600;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .question-list td {
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .question-list tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .question-list a {
+            color: #ff4d4f;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .question-list a:hover {
+            text-decoration: underline;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                padding: 10px 15px;
+            }
+            
+            .header h1 {
+                font-size: 16px;
+            }
+            
+            .nav {
+                padding: 8px 15px;
+                gap: 10px;
+            }
+            
+            .nav a {
+                padding: 6px 12px;
+                font-size: 13px;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+            
+            .add-question {
+                padding: 15px;
+                margin-bottom: 15px;
+            }
+            
+            .add-question h2 {
+                font-size: 15px;
+                margin-bottom: 14px;
+            }
+            
+            .form-group {
+                margin-bottom: 14px;
+            }
+            
+            .form-group input,
+            .form-group textarea {
+                padding: 8px 12px;
+            }
+            
+            .question-list th,
+            .question-list td {
+                padding: 10px 14px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>常见问题设置</h1>
+        <a href="/admin/logout">退出登录</a>
+    </div>
+    
+    <div class="nav">
+        <a href="/admin/dashboard">用户列表</a>
+        <a href="/admin/auto_replies">关键词自动回复</a>
+        <a href="/admin/common_questions">常见问题设置</a>
+        <a href="/admin/welcome_messages">打招呼语句</a>
+        <a href="/admin/settings">系统设置</a>
+    </div>
+    
+    <div class="container">
+        <div class="add-question">
+            <h2>添加常见问题</h2>
+            <div class="form-group">
+                <label for="question">问题</label>
+                <input type="text" id="question" placeholder="请输入问题">
+            </div>
+            <div class="form-group">
+                <label for="message-type">消息类型</label>
+                <select id="message-type">
+                    <option value="text">文本</option>
+                    <option value="image">图片</option>
+                    <option value="video">视频</option>
+                </select>
+            </div>
+            <div class="form-group" id="text-content-group">
+                <label for="content">答案内容</label>
+                <textarea id="content" placeholder="请输入答案内容"></textarea>
+                <div style="margin-top: 8px; font-size: 12px; color: #999;">
+                    <strong>支持的格式：</strong><br>
+                    - 换行：直接按Enter键<br>
+                    - 加粗：**文本**<br>
+                    - 颜色：#color#文本#（支持：red, green, blue, yellow, purple, orange, black, white, gray, pink, brown, cyan, magenta）<br>
+                    - 链接：直接输入URL
+                </div>
+            </div>
+            <div class="form-group" id="file-upload-group" style="display: none;">
+                <label>上传文件</label>
+                <input type="file" id="file-upload" accept="image/*,video/*">
+                <div id="upload-status"></div>
+            </div>
+            <div class="form-group">
+                <label for="order-index">排序索引</label>
+                <input type="number" id="order-index" value="0" min="0">
+            </div>
+            <button class="add-button" id="add-button">添加</button>
+        </div>
+        
+        <div class="question-list">
+            <table>
+                <thead>
+                    <tr>
+                        <th>问题</th>
+                        <th>答案</th>
+                        <th>消息类型</th>
+                        <th>排序索引</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cq in common_questions %}
+                    <tr>
+                        <td>{{ cq.question|e }}</td>
+                        <td>{{ cq.content[:100]|e }}{% if cq.content|length > 100 %}...{% endif %}</td>
+                        <td>{{ cq.message_type|e }}</td>
+                        <td>{{ cq.order_index|e }}</td>
+                        <td><a href="/admin/delete_common_question/{{ cq.id|e }}">删除</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        // 消息类型切换逻辑
+        document.getElementById('message-type').addEventListener('change', function() {
+            const messageType = this.value;
+            const textContentGroup = document.getElementById('text-content-group');
+            const fileUploadGroup = document.getElementById('file-upload-group');
+            
+            if (messageType === 'text') {
+                textContentGroup.style.display = 'block';
+                fileUploadGroup.style.display = 'none';
+            } else {
+                textContentGroup.style.display = 'none';
+                fileUploadGroup.style.display = 'block';
+            }
+        });
+        
+        // 文件上传处理
+        let uploadedFileName = null;
+        document.getElementById('file-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const uploadStatus = document.getElementById('upload-status');
+                uploadStatus.innerHTML = '上传中...';
+                
+                fetch('/admin/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        uploadedFileName = data.filename;
+                        uploadStatus.innerHTML = '上传成功：' + file.name;
+                        uploadStatus.style.color = 'green';
+                    } else {
+                        uploadStatus.innerHTML = '上传失败：' + data.message;
+                        uploadStatus.style.color = 'red';
+                        uploadedFileName = null;
+                    }
+                });
+            }
+        });
+        
+        // 添加常见问题
+        document.getElementById('add-button').addEventListener('click', function() {
+            const question = document.getElementById('question').value.trim();
+            const messageType = document.getElementById('message-type').value;
+            const orderIndex = parseInt(document.getElementById('order-index').value) || 0;
+            let content = null;
+            
+            if (messageType === 'text') {
+                content = document.getElementById('content').value.trim();
+                if (!content) {
+                    alert('请填写答案内容。');
+                    return;
+                }
+            } else {
+                if (!uploadedFileName) {
+                    alert('请上传文件。');
+                    return;
+                }
+                content = uploadedFileName;
+            }
+            
+            if (!question) {
+                alert('请填写问题。');
+                return;
+            }
+            
+            fetch('/admin/add_common_question', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    question: question, 
+                    content: content, 
+                    message_type: messageType, 
+                    order_index: orderIndex 
+                })
+            })
+            .then(response => response.json())
+            .then(() => {
+                // 刷新页面
+                window.location.reload();
+            });
+        });
+    </script>
+</body>
+</html>

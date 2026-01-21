@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聊天管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background-color: #1890ff;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 18px;
+        }
+        
+        .header a {
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #fff;
+            margin: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+            overflow: hidden;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .message {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+        
+        .user-message {
+            align-self: flex-start;
+            background-color: #f0f0f0;
+            color: #333;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .admin-message {
+            align-self: flex-end;
+            background-color: #e6f7ff;
+            color: #333;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message-time {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+            text-align: left;
+        }
+        
+        .admin-message .message-time {
+            text-align: right;
+        }
+        
+        .chat-input {
+            padding: 20px;
+            display: flex;
+            gap: 10px;
+            background-color: #fafafa;
+            border-top: 1px solid #e8e8e8;
+            flex-wrap: wrap;
+        }
+        
+        .chat-input textarea {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #d9d9d9;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: none;
+            height: 80px;
+            min-width: 200px;
+        }
+        
+        .chat-input input[type="file"] {
+            display: none;
+        }
+        
+        .chat-input label {
+            padding: 8px 12px;
+            background-color: #f0f0f0;
+            color: #333;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            align-self: flex-end;
+        }
+        
+        .chat-input label:hover {
+            background-color: #e0e0e0;
+        }
+        
+        .chat-input button {
+            padding: 0 24px;
+            background-color: #1890ff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            align-self: flex-end;
+        }
+        
+        .chat-input button:hover {
+            background-color: #40a9ff;
+        }
+        
+        .image-message img {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+        }
+        
+        .video-message video {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                padding: 10px 15px;
+            }
+            
+            .header h1 {
+                font-size: 16px;
+            }
+            
+            .chat-container {
+                margin: 10px;
+            }
+            
+            .chat-messages {
+                padding: 15px;
+                gap: 10px;
+            }
+            
+            .message {
+                max-width: 85%;
+                padding: 10px 14px;
+            }
+            
+            .chat-input {
+                padding: 15px;
+            }
+            
+            .chat-input textarea {
+                padding: 10px 14px;
+                height: 60px;
+            }
+            
+            .chat-input button {
+                padding: 0 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>与用户聊天</h1>
+        <a href="/admin/dashboard">返回列表</a>
+    </div>
+    
+    <div class="chat-container">
+        <div class="chat-messages" id="chat-messages">
+            {% for msg in messages %}
+            <div class="message {{ 'admin-message' if msg.is_admin else 'user-message' }}">
+                {% if msg.message_type == 'text' %}
+                <div>{{ msg.content }}</div>
+                {% elif msg.message_type == 'image' %}
+                <div class="image-message"><img src="/uploads/{{ msg.content }}" alt="Image"></div>
+                {% elif msg.message_type == 'video' %}
+                <div class="video-message"><video controls><source src="/uploads/{{ msg.content }}" type="video/mp4">Your browser does not support the video tag.</video></div>
+                {% endif %}
+                <div class="message-time">{{ msg.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="chat-input">
+            <textarea id="message-input" placeholder="请输入回复..."></textarea>
+            <label for="admin-image-upload">📷</label>
+            <input type="file" id="admin-image-upload" accept="image/*">
+            <label for="admin-video-upload">🎬</label>
+            <input type="file" id="admin-video-upload" accept="video/*">
+            <button id="send-button">发送</button>
+        </div>
+    </div>
+    
+    <script>
+        const user_id = '{{ user_id }}';
+        
+        // 加载消息
+        function loadMessages() {
+            fetch('/get_messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ user_id: user_id })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const messagesContainer = document.getElementById('chat-messages');
+                
+                // 获取当前已有的消息时间
+                const existingMessageTimes = [];
+                const messageDivs = messagesContainer.querySelectorAll('.message');
+                messageDivs.forEach(div => {
+                    const timeElement = div.querySelector('.message-time');
+                    if (timeElement) {
+                        existingMessageTimes.push(timeElement.textContent);
+                    }
+                });
+                
+                // HTML转义函数，防止XSS攻击
+                function escapeHtml(text) {
+                    const div = document.createElement('div');
+                    div.textContent = text;
+                    return div.innerHTML;
+                }
+                
+                // 复制到剪贴板
+                window.copyToClipboard = function(text) {
+                    navigator.clipboard.writeText(text).then(function() {
+                        // 显示复制成功提示
+                        const tooltip = document.createElement('div');
+                        tooltip.style.position = 'fixed';
+                        tooltip.style.top = '20px';
+                        tooltip.style.right = '20px';
+                        tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+                        tooltip.style.color = 'white';
+                        tooltip.style.padding = '10px 15px';
+                        tooltip.style.borderRadius = '4px';
+                        tooltip.style.zIndex = '10000';
+                        tooltip.textContent = '已复制到剪贴板！';
+                        document.body.appendChild(tooltip);
+                        
+                        // 2秒后移除提示
+                        setTimeout(function() {
+                            tooltip.style.opacity = '0';
+                            tooltip.style.transition = 'opacity 0.5s';
+                            setTimeout(function() {
+                                document.body.removeChild(tooltip);
+                            }, 500);
+                        }, 2000);
+                    });
+                };
+                
+                // 检查是否有新消息
+                let hasNewMessages = false;
+                
+                // 添加新消息
+                data.forEach(msg => {
+                    // 检查消息是否已存在
+                    if (!existingMessageTimes.includes(msg.created_at)) {
+                        hasNewMessages = true;
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = msg.is_admin ? 'message admin-message' : 'message user-message';
+                        
+                        let contentHtml = '';
+                        if (msg.message_type === 'text') {
+                            // 处理文本内容，支持加粗、颜色和链接
+                            let processedContent = escapeHtml(msg.content);
+                            // 处理换行符，将\n替换为<br>
+                            processedContent = processedContent.replace(/\n/g, '<br>');
+                            // 处理加粗标记，格式：**文本**
+                            processedContent = processedContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                            // 处理颜色标记，格式：#color#文本#
+                            const colorRegex = /#(red|green|blue|yellow|purple|orange|black|white|gray|grey|pink|brown|cyan|magenta)#([^#]+)#/g;
+                            processedContent = processedContent.replace(colorRegex, '<span style="color: $1;">$2</span>');
+                            // 处理链接，添加点击复制功能
+                            const urlRegex = /(https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=.]+)/g;
+                            processedContent = processedContent.replace(urlRegex, '<span style="color: blue; text-decoration: underline; cursor: pointer;" onclick="copyToClipboard(this.textContent)">$1</span>');
+                            contentHtml = `<div>${processedContent}</div>`;
+                        } else if (msg.message_type === 'image') {
+                            contentHtml = `<div class="image-message"><img src="/uploads/${escapeHtml(msg.content)}" alt="Image"></div>`;
+                        } else if (msg.message_type === 'video') {
+                            contentHtml = `<div class="video-message"><video controls><source src="/uploads/${escapeHtml(msg.content)}" type="video/mp4">Your browser does not support the video tag.</video></div>`;
+                        }
+                        
+                        messageDiv.innerHTML = `
+                            ${contentHtml}
+                            <div class="message-time">${escapeHtml(msg.created_at)}</div>
+                        `;
+                        messagesContainer.appendChild(messageDiv);
+                    }
+                });
+                
+                // 如果有新消息，滚动到底部
+                if (hasNewMessages) {
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+            });
+        }
+        
+        // 发送消息
+        function sendMessage(content, messageType = 'text') {
+            fetch('/admin/send_message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ user_id: user_id, content: content, message_type: messageType })
+            })
+            .then(response => response.json())
+            .then(() => {
+                // 加载最新消息
+                loadMessages();
+            });
+        }
+        
+        // 上传文件
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/admin/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    sendMessage(data.filename, data.message_type);
+                } else {
+                    alert(data.message);
+                }
+            });
+        }
+        
+        // 绑定发送按钮事件
+        document.getElementById('send-button').addEventListener('click', function() {
+            const content = document.getElementById('message-input').value.trim();
+            if (content) {
+                sendMessage(content);
+                // 清空输入框
+                document.getElementById('message-input').value = '';
+            }
+        });
+        
+        // 按Enter发送（Shift+Enter换行）
+        document.getElementById('message-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                document.getElementById('send-button').click();
+            }
+        });
+        
+        // 绑定文件上传事件
+        document.getElementById('admin-image-upload').addEventListener('change', function(e) {
+            if (e.target.files && e.target.files[0]) {
+                uploadFile(e.target.files[0]);
+                e.target.value = ''; // 重置文件输入
+            }
+        });
+        
+        document.getElementById('admin-video-upload').addEventListener('change', function(e) {
+            if (e.target.files && e.target.files[0]) {
+                uploadFile(e.target.files[0]);
+                e.target.value = ''; // 重置文件输入
+            }
+        });
+        
+        // 初始化
+        window.onload = function() {
+            // 加载消息
+            loadMessages();
+            // 每3秒自动刷新消息
+            setInterval(loadMessages, 3000);
+        };
+    </script>
+</body>
+</html>
