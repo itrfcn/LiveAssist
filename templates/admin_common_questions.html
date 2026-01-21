@@ -272,20 +272,20 @@
             <table>
                 <thead>
                     <tr>
+                        <th>排序</th>
                         <th>问题</th>
                         <th>答案</th>
                         <th>消息类型</th>
-                        <th>排序索引</th>
                         <th>操作</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for cq in common_questions %}
                     <tr>
+                        <td>{{ cq.order_index|e }}</td>
                         <td>{{ cq.question|e }}</td>
                         <td>{{ cq.content[:100]|e }}{% if cq.content|length > 100 %}...{% endif %}</td>
                         <td>{{ cq.message_type|e }}</td>
-                        <td>{{ cq.order_index|e }}</td>
                         <td><a href="/admin/delete_common_question/{{ cq.id|e }}">删除</a></td>
                     </tr>
                     {% endfor %}

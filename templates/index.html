@@ -197,9 +197,29 @@
         </div>
     </div>
     
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <script>
         const user_id = '{{ user_id }}';
         const common_questions = {{ common_questions|tojson }};
+        
+        // 创建WebSocket连接
+        const socket = io();
+        
+        // WebSocket事件处理
+        socket.on('connect', function() {
+            console.log('WebSocket connected');
+            // 加入房间
+            socket.emit('join_room', { user_id: user_id });
+        });
+        
+        socket.on('disconnect', function() {
+            console.log('WebSocket disconnected');
+        });
+        
+        // 接收新消息
+        socket.on('new_message', function(msg) {
+            addMessage(msg);
+        });
         
         // 加载消息
         function loadMessages() {
@@ -305,24 +325,7 @@
                     // 检查消息是否已存在
                     if (!existingMessageTimes.includes(msg.created_at)) {
                         hasNewMessages = true;
-                        const messageDiv = document.createElement('div');
-                        messageDiv.className = msg.is_admin ? 'message admin-message' : 'message user-message';
-                        
-                        let contentHtml = '';
-                        if (msg.message_type === 'text') {
-                            const processedContent = processTextContent(msg.content);
-                            contentHtml = `<div>${processedContent}</div>`;
-                        } else if (msg.message_type === 'image') {
-                            contentHtml = `<div class="image-message"><img src="/uploads/${msg.content}" alt="Image"></div>`;
-                        } else if (msg.message_type === 'video') {
-                            contentHtml = `<div class="video-message"><video controls><source src="/uploads/${msg.content}" type="video/mp4">Your browser does not support the video tag.</video></div>`;
-                        }
-                        
-                        messageDiv.innerHTML = `
-                            ${contentHtml}
-                            <div class="message-time">${msg.created_at}</div>
-                        `;
-                        messagesContainer.appendChild(messageDiv);
+                        addMessage(msg);
                     }
                 });
                 
@@ -337,10 +340,6 @@
                             item.onclick = function() {
                                 const question = this.getAttribute('data-question');
                                 sendMessage(question);
-                                // 模拟发送回答
-                                setTimeout(() => {
-                                    loadMessages();
-                                }, 500);
                             };
                         });
                     }
@@ -352,23 +351,80 @@
                 
                 // 如果有新消息，滚动到底部
                 if (hasNewMessages) {
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    scrollToBottom();
                 }
             });
         }
         
+        // 添加消息到聊天界面
+        function addMessage(msg) {
+            const messagesContainer = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = msg.is_admin ? 'message admin-message' : 'message user-message';
+            
+            // HTML转义函数，防止XSS攻击
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            // 处理文本内容，支持链接复制和颜色设置
+            function processTextContent(text) {
+                // 先进行HTML转义，防止XSS攻击
+                let processedText = escapeHtml(text);
+                
+                // 处理换行符，将\n替换为<br>
+                processedText = processedText.replace(/\n/g, '<br>');
+                
+                // 处理加粗标记，格式：**文本**
+                processedText = processedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                
+                // 处理颜色标记，格式：#color#文本#
+                const colorRegex = /#(red|green|blue|yellow|purple|orange|black|white|gray|grey|pink|brown|cyan|magenta)#([^#]+)#/g;
+                processedText = processedText.replace(colorRegex, '<span style="color: $1;">$2</span>');
+                
+                // 处理链接，添加点击复制功能
+                const urlRegex = /(https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=.]+)/g;
+                processedText = processedText.replace(urlRegex, '<span style="color: blue; text-decoration: underline; cursor: pointer;" onclick="copyToClipboard(this.textContent)">$1</span>');
+                
+                return processedText;
+            }
+            
+            let contentHtml = '';
+            if (msg.message_type === 'text') {
+                const processedContent = processTextContent(msg.content);
+                contentHtml = `<div>${processedContent}</div>`;
+            } else if (msg.message_type === 'image') {
+                contentHtml = `<div class="image-message"><img src="/uploads/${msg.content}" alt="Image"></div>`;
+            } else if (msg.message_type === 'video') {
+                contentHtml = `<div class="video-message"><video controls><source src="/uploads/${msg.content}" type="video/mp4">Your browser does not support the video tag.</video></div>`;
+            }
+            
+            messageDiv.innerHTML = `
+                ${contentHtml}
+                <div class="message-time">${msg.created_at}</div>
+            `;
+            messagesContainer.appendChild(messageDiv);
+            
+            // 滚动到底部
+            scrollToBottom();
+        }
+        
+        // 滚动到底部
+        function scrollToBottom() {
+            const messagesContainer = document.getElementById('chat-messages');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
         // 发送消息
         function sendMessage(content, messageType = 'text') {
-            fetch('/send_message', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ user_id: user_id, content: content, message_type: messageType })
-            })
-            .then(response => response.json())
-            .then(() => {
-                loadMessages();
+            // 使用WebSocket发送消息
+            socket.emit('send_message', {
+                user_id: user_id,
+                content: content,
+                message_type: messageType,
+                is_admin: false
             });
         }
         
@@ -450,10 +506,6 @@
                     item.onclick = function() {
                         const question = this.getAttribute('data-question');
                         sendMessage(question);
-                        // 模拟发送回答
-                        setTimeout(() => {
-                            loadMessages();
-                        }, 500);
                     };
                 });
             }
@@ -486,9 +538,6 @@
             // 然后添加常见问题（位于打招呼语句下面）
             setTimeout(initCommonQuestions, 500);
         };
-        
-        // 定时刷新消息
-        setInterval(loadMessages, 3000);
     </script>
 </body>
 </html>

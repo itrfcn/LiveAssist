@@ -225,8 +225,28 @@
         </div>
     </div>
     
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <script>
         const user_id = '{{ user_id }}';
+        
+        // 创建WebSocket连接
+        const socket = io();
+        
+        // WebSocket事件处理
+        socket.on('connect', function() {
+            console.log('WebSocket connected');
+            // 加入房间
+            socket.emit('join_room', { user_id: user_id });
+        });
+        
+        socket.on('disconnect', function() {
+            console.log('WebSocket disconnected');
+        });
+        
+        // 接收新消息
+        socket.on('new_message', function(msg) {
+            addMessage(msg);
+        });
         
         // 加载消息
         function loadMessages() {
@@ -293,58 +313,75 @@
                     // 检查消息是否已存在
                     if (!existingMessageTimes.includes(msg.created_at)) {
                         hasNewMessages = true;
-                        const messageDiv = document.createElement('div');
-                        messageDiv.className = msg.is_admin ? 'message admin-message' : 'message user-message';
-                        
-                        let contentHtml = '';
-                        if (msg.message_type === 'text') {
-                            // 处理文本内容，支持加粗、颜色和链接
-                            let processedContent = escapeHtml(msg.content);
-                            // 处理换行符，将\n替换为<br>
-                            processedContent = processedContent.replace(/\n/g, '<br>');
-                            // 处理加粗标记，格式：**文本**
-                            processedContent = processedContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-                            // 处理颜色标记，格式：#color#文本#
-                            const colorRegex = /#(red|green|blue|yellow|purple|orange|black|white|gray|grey|pink|brown|cyan|magenta)#([^#]+)#/g;
-                            processedContent = processedContent.replace(colorRegex, '<span style="color: $1;">$2</span>');
-                            // 处理链接，添加点击复制功能
-                            const urlRegex = /(https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=.]+)/g;
-                            processedContent = processedContent.replace(urlRegex, '<span style="color: blue; text-decoration: underline; cursor: pointer;" onclick="copyToClipboard(this.textContent)">$1</span>');
-                            contentHtml = `<div>${processedContent}</div>`;
-                        } else if (msg.message_type === 'image') {
-                            contentHtml = `<div class="image-message"><img src="/uploads/${escapeHtml(msg.content)}" alt="Image"></div>`;
-                        } else if (msg.message_type === 'video') {
-                            contentHtml = `<div class="video-message"><video controls><source src="/uploads/${escapeHtml(msg.content)}" type="video/mp4">Your browser does not support the video tag.</video></div>`;
-                        }
-                        
-                        messageDiv.innerHTML = `
-                            ${contentHtml}
-                            <div class="message-time">${escapeHtml(msg.created_at)}</div>
-                        `;
-                        messagesContainer.appendChild(messageDiv);
+                        addMessage(msg);
                     }
                 });
                 
                 // 如果有新消息，滚动到底部
                 if (hasNewMessages) {
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    scrollToBottom();
                 }
             });
         }
         
+        // 添加消息到聊天界面
+        function addMessage(msg) {
+            const messagesContainer = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = msg.is_admin ? 'message admin-message' : 'message user-message';
+            
+            // HTML转义函数，防止XSS攻击
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            let contentHtml = '';
+            if (msg.message_type === 'text') {
+                // 处理文本内容，支持加粗、颜色和链接
+                let processedContent = escapeHtml(msg.content);
+                // 处理换行符，将\n替换为<br>
+                processedContent = processedContent.replace(/\n/g, '<br>');
+                // 处理加粗标记，格式：**文本**
+                processedContent = processedContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                // 处理颜色标记，格式：#color#文本#
+                const colorRegex = /#(red|green|blue|yellow|purple|orange|black|white|gray|grey|pink|brown|cyan|magenta)#([^#]+)#/g;
+                processedContent = processedContent.replace(colorRegex, '<span style="color: $1;">$2</span>');
+                // 处理链接，添加点击复制功能
+                const urlRegex = /(https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=.]+)/g;
+                processedContent = processedContent.replace(urlRegex, '<span style="color: blue; text-decoration: underline; cursor: pointer;" onclick="copyToClipboard(this.textContent)">$1</span>');
+                contentHtml = `<div>${processedContent}</div>`;
+            } else if (msg.message_type === 'image') {
+                contentHtml = `<div class="image-message"><img src="/uploads/${escapeHtml(msg.content)}" alt="Image"></div>`;
+            } else if (msg.message_type === 'video') {
+                contentHtml = `<div class="video-message"><video controls><source src="/uploads/${escapeHtml(msg.content)}" type="video/mp4">Your browser does not support the video tag.</video></div>`;
+            }
+            
+            messageDiv.innerHTML = `
+                ${contentHtml}
+                <div class="message-time">${escapeHtml(msg.created_at)}</div>
+            `;
+            messagesContainer.appendChild(messageDiv);
+            
+            // 滚动到底部
+            scrollToBottom();
+        }
+        
+        // 滚动到底部
+        function scrollToBottom() {
+            const messagesContainer = document.getElementById('chat-messages');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
         // 发送消息
         function sendMessage(content, messageType = 'text') {
-            fetch('/admin/send_message', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ user_id: user_id, content: content, message_type: messageType })
-            })
-            .then(response => response.json())
-            .then(() => {
-                // 加载最新消息
-                loadMessages();
+            // 使用WebSocket发送消息
+            socket.emit('send_message', {
+                user_id: user_id,
+                content: content,
+                message_type: messageType,
+                is_admin: true
             });
         }
         
@@ -404,8 +441,6 @@
         window.onload = function() {
             // 加载消息
             loadMessages();
-            // 每3秒自动刷新消息
-            setInterval(loadMessages, 3000);
         };
     </script>
 </body>

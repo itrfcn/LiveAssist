@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from datetime import datetime
 import random
 import string
@@ -8,6 +9,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
+socketio = SocketIO(app, cors_allowed_origins="*")
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///chat.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -238,43 +240,7 @@ def get_messages():
         'created_at': msg.created_at.strftime('%Y-%m-%d %H:%M:%S')
     } for msg in messages])
 
-@app.route('/send_message', methods=['POST'])
-def send_message():
-    user_id = request.json.get('user_id')
-    content = request.json.get('content')
-    message_type = request.json.get('message_type', 'text')
-    
-    # 保存用户消息
-    message = Message(user_id=user_id, content=content, is_admin=False, is_read=False, message_type=message_type)
-    db.session.add(message)
-    db.session.commit()
-    
-    # 只有文本消息才检查自动回复
-    if message_type == 'text':
-        # 检查关键词自动回复
-        auto_replies = AutoReply.query.order_by(AutoReply.order_index).all()
-        reply_sent = False
-        
-        # 先检查常见问题匹配
-        common_questions = CommonQuestion.query.order_by(CommonQuestion.order_index).all()
-        for cq in common_questions:
-            if cq.question == content:
-                admin_reply = Message(user_id=user_id, content=cq.content, is_admin=True, message_type=cq.message_type)
-                db.session.add(admin_reply)
-                db.session.commit()
-                reply_sent = True
-                break
-        
-        # 如果没有匹配常见问题，检查关键词自动回复
-        if not reply_sent:
-            for reply in auto_replies:
-                if reply.keyword in content:
-                    admin_reply = Message(user_id=user_id, content=reply.content, is_admin=True, message_type=reply.message_type)
-                    db.session.add(admin_reply)
-                    db.session.commit()
-                    break
-    
-    return jsonify({'status': 'success'})
+
 
 @app.route('/admin')
 def admin_login():
@@ -380,20 +346,7 @@ def admin_chat(user_id):
     
     return render_template('admin_chat.html', user_id=user_id, messages=messages)
 
-@app.route('/admin/send_message', methods=['POST'])
-def admin_send_message():
-    if 'admin_logged_in' not in session or not session['admin_logged_in']:
-        return jsonify({'status': 'error'})
-    
-    user_id = request.json.get('user_id')
-    content = request.json.get('content')
-    message_type = request.json.get('message_type', 'text')
-    
-    message = Message(user_id=user_id, content=content, is_admin=True, message_type=message_type)
-    db.session.add(message)
-    db.session.commit()
-    
-    return jsonify({'status': 'success'})
+
 
 @app.route('/admin/auto_replies')
 def admin_auto_replies():
@@ -708,5 +661,144 @@ def update_user_info():
     else:
         return jsonify({'status': 'error', 'message': 'User not found'})
 
+# WebSocket事件处理
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+
+@socketio.on('join_room')
+def handle_join_room(data):
+    user_id = data['user_id']
+    join_room(user_id)
+    print(f'User {user_id} joined room')
+
+@socketio.on('send_message')
+def handle_send_message(data):
+    user_id = data['user_id']
+    content = data['content']
+    message_type = data.get('message_type', 'text')
+    is_admin = data.get('is_admin', False)
+    
+    # 保存消息到数据库
+    message = Message(
+        user_id=user_id,
+        content=content,
+        is_admin=is_admin,
+        message_type=message_type
+    )
+    db.session.add(message)
+    db.session.commit()
+    
+    # 发送消息到房间
+    socketio.emit('new_message', {
+        'content': content,
+        'is_admin': is_admin,
+        'message_type': message_type,
+        'created_at': message.created_at.strftime('%Y-%m-%d %H:%M:%S')
+    }, room=user_id)
+    
+    # 如果是用户消息，检查自动回复
+    if not is_admin and message_type == 'text':
+        # 检查关键词自动回复
+        auto_replies = AutoReply.query.order_by(AutoReply.order_index).all()
+        reply_sent = False
+        
+        # 先检查常见问题匹配
+        common_questions = CommonQuestion.query.order_by(CommonQuestion.order_index).all()
+        for cq in common_questions:
+            if cq.question == content:
+                admin_reply = Message(
+                    user_id=user_id,
+                    content=cq.content,
+                    is_admin=True,
+                    message_type=cq.message_type
+                )
+                db.session.add(admin_reply)
+                db.session.commit()
+                
+                # 发送自动回复到房间
+                socketio.emit('new_message', {
+                    'content': cq.content,
+                    'is_admin': True,
+                    'message_type': cq.message_type,
+                    'created_at': admin_reply.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                }, room=user_id)
+                reply_sent = True
+                break
+        
+        # 如果没有匹配常见问题，检查关键词自动回复
+        if not reply_sent:
+            for reply in auto_replies:
+                if reply.keyword in content:
+                    admin_reply = Message(
+                        user_id=user_id,
+                        content=reply.content,
+                        is_admin=True,
+                        message_type=reply.message_type
+                    )
+                    db.session.add(admin_reply)
+                    db.session.commit()
+                    
+                    # 发送自动回复到房间
+                    socketio.emit('new_message', {
+                        'content': reply.content,
+                        'is_admin': True,
+                        'message_type': reply.message_type,
+                        'created_at': admin_reply.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                    }, room=user_id)
+                    break
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected')
+
+# 修改现有的发送消息函数，添加WebSocket通知
+def send_message_with_notification(user_id, content, message_type='text', is_admin=False):
+    message = Message(
+        user_id=user_id,
+        content=content,
+        is_admin=is_admin,
+        message_type=message_type
+    )
+    db.session.add(message)
+    db.session.commit()
+    
+    # 通过WebSocket发送消息
+    socketio.emit('new_message', {
+        'content': content,
+        'is_admin': is_admin,
+        'message_type': message_type,
+        'created_at': message.created_at.strftime('%Y-%m-%d %H:%M:%S')
+    }, room=user_id)
+    
+    return message
+
+# 修改admin_send_message函数，使用WebSocket通知
+@app.route('/admin/send_message', methods=['POST'])
+def admin_send_message():
+    if 'admin_logged_in' not in session or not session['admin_logged_in']:
+        return jsonify({'status': 'error'})
+    
+    user_id = request.json.get('user_id')
+    content = request.json.get('content')
+    message_type = request.json.get('message_type', 'text')
+    
+    # 使用新函数发送消息并通知
+    send_message_with_notification(user_id, content, message_type, is_admin=True)
+    
+    return jsonify({'status': 'success'})
+
+# 修改send_message函数，使用WebSocket通知
+@app.route('/send_message', methods=['POST'])
+def send_message():
+    user_id = request.json.get('user_id')
+    content = request.json.get('content')
+    message_type = request.json.get('message_type', 'text')
+    
+    # 使用新函数发送消息并通知
+    message = send_message_with_notification(user_id, content, message_type, is_admin=False)
+    
+    return jsonify({'status': 'success'})
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    socketio.run(app, debug=True)
