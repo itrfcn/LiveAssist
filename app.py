@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from datetime import datetime
@@ -6,6 +6,8 @@ import random
 import string
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
+from PIL import Image, ImageDraw, ImageFont
+import io
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
@@ -252,6 +254,11 @@ def admin_login():
 def admin_login_post():
     username = request.form.get('username')
     password = request.form.get('password')
+    captcha = request.form.get('captcha')
+    
+    # 验证验证码
+    if not captcha or captcha.upper() != session.get('captcha', '').upper():
+        return redirect(url_for('admin_login'))
     
     admin = Admin.query.filter_by(username=username).first()
     if admin and check_password_hash(admin.password, password):
@@ -660,6 +667,47 @@ def update_user_info():
         return jsonify({'status': 'success'})
     else:
         return jsonify({'status': 'error', 'message': 'User not found'})
+
+# 生成验证码
+@app.route('/admin/captcha')
+def generate_captcha():
+    # 生成随机验证码
+    captcha_text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    
+    # 存储验证码到session
+    session['captcha'] = captcha_text
+    
+    # 创建验证码图像
+    width, height = 120, 40
+    image = Image.new('RGB', (width, height), color=(255, 255, 255))
+    draw = ImageDraw.Draw(image)
+    
+    # 尝试使用系统字体，如果失败则使用默认字体
+    try:
+        font = ImageFont.truetype('arial.ttf', 28)
+    except:
+        font = ImageFont.load_default()
+    
+    # 绘制验证码文本
+    for i, char in enumerate(captcha_text):
+        draw.text((20 + i * 25, 5), char, fill=(random.randint(0, 100), random.randint(0, 100), random.randint(0, 100)), font=font)
+    
+    # 添加干扰线
+    for _ in range(5):
+        draw.line([(random.randint(0, width), random.randint(0, height)), (random.randint(0, width), random.randint(0, height))], fill=(random.randint(0, 200), random.randint(0, 200), random.randint(0, 200)), width=1)
+    
+    # 添加干扰点
+    for _ in range(50):
+        draw.point([(random.randint(0, width), random.randint(0, height))], fill=(random.randint(0, 200), random.randint(0, 200), random.randint(0, 200)))
+    
+    # 将图像转换为响应
+    buffer = io.BytesIO()
+    image.save(buffer, format='PNG')
+    buffer.seek(0)
+    
+    response = make_response(buffer.getvalue())
+    response.headers['Content-Type'] = 'image/png'
+    return response
 
 # WebSocket事件处理
 @socketio.on('connect')

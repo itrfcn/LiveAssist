@@ -96,6 +96,13 @@
                 <label for="password">密码</label>
                 <input type="password" id="password" name="password" required>
             </div>
+            <div class="form-group">
+                <label for="captcha">验证码</label>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="text" id="captcha" name="captcha" required style="flex: 1;">
+                    <img src="/admin/captcha" alt="验证码" onclick="this.src='/admin/captcha?'+Math.random()" style="cursor: pointer; height: 40px; border-radius: 4px;">
+                </div>
+            </div>
             <button type="submit" class="login-button">登录</button>
         </form>
     </div>
