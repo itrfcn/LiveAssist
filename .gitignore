@@ -1,8 +1,10 @@
 # 数据库文件
-instance/
+instance/*
+!instance/.gitkeep
 
 # 上传文件
-uploads/
+uploads/*
+!uploads/.gitkeep
 
 # 虚拟环境
 venv/
