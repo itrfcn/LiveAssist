@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room, leave_room
+from werkzeug.middleware.proxy_fix import ProxyFix
 from datetime import datetime
 import random
 import string
@@ -11,6 +12,9 @@ import io
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
+# 配置信任代理，用于在宝塔等反向代理后面获取真实用户IP
+app.config['TRAP_HTTP_EXCEPTIONS'] = True
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 socketio = SocketIO(app, cors_allowed_origins="*")
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///chat.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -87,6 +91,9 @@ def generate_unique_filename(filename):
 
 # 根据用户代理字符串检测设备类型
 def detect_device_type(user_agent):
+    if not user_agent:
+        return '未知设备'
+    
     user_agent = user_agent.lower()
     
     # 移动设备
