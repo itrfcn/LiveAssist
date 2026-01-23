@@ -786,6 +786,11 @@ def handle_join_room(data):
     join_room(user_id)
     print(f'User {user_id} joined room')
 
+@socketio.on('join_admin_room')
+def handle_join_admin_room():
+    join_room('admin')
+    print('Admin joined admin room')
+
 @socketio.on('send_message')
 def handle_send_message(data):
     user_id = data['user_id']
@@ -810,6 +815,9 @@ def handle_send_message(data):
         'message_type': message_type,
         'created_at': message.created_at.strftime('%Y-%m-%d %H:%M:%S')
     }, room=user_id)
+    
+    # 通知管理员更新用户列表
+    notify_admin_update()
     
     # 如果是用户消息，检查自动回复
     if not is_admin and message_type == 'text':
@@ -885,7 +893,14 @@ def send_message_with_notification(user_id, content, message_type='text', is_adm
         'created_at': message.created_at.strftime('%Y-%m-%d %H:%M:%S')
     }, room=user_id)
     
+    # 通知管理员更新用户列表
+    notify_admin_update()
+    
     return message
+
+# 通知管理员更新用户列表
+def notify_admin_update():
+    socketio.emit('admin_update', {}, room='admin')
 
 # 修改admin_send_message函数，使用WebSocket通知
 @app.route('/admin/send_message', methods=['POST'])

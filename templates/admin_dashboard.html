@@ -231,7 +231,23 @@
         </div>
     </div>
 
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     <script>
+        // 初始化Socket.IO连接
+        const socket = io();
+        
+        // 连接成功后加入管理员房间
+        socket.on('connect', function() {
+            console.log('Connected to server');
+            socket.emit('join_admin_room');
+        });
+        
+        // 监听管理员更新事件
+        socket.on('admin_update', function() {
+            console.log('Received admin update notification');
+            refreshUserList();
+        });
+        
         // 从元素数据属性编辑用户信息
         function editUserInfoFromElement(element) {
             const userId = element.getAttribute('data-user-id');
@@ -288,7 +304,7 @@
             return div.innerHTML;
         }
         
-        // 自动刷新用户列表和未读消息计数
+        // 刷新用户列表
         function refreshUserList() {
             // 发送请求获取最新的用户数据
             fetch('/admin/dashboard_data')
@@ -331,8 +347,6 @@
         // 页面加载时刷新一次
         window.onload = function() {
             refreshUserList();
-            // 每3秒自动刷新一次
-            setInterval(refreshUserList, 3000);
         };
     </script>
 </body>
