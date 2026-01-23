@@ -171,7 +171,8 @@ with app.app_context():
         # 添加默认系统设置
         settings = [
             {'key': 'allow_user_images', 'value': 'true'},
-            {'key': 'allow_user_videos', 'value': 'true'}
+            {'key': 'allow_user_videos', 'value': 'true'},
+            {'key': 'chat_path', 'value': '/'}
         ]
         for setting in settings:
             ss = SystemSetting(key=setting['key'], value=setting['value'])
@@ -198,6 +199,60 @@ def uploaded_file(filename):
 
 @app.route('/')
 def index():
+    # 获取聊天路径设置
+    chat_path = get_system_setting('chat_path', '/')
+    # 如果设置了自定义路径，根路径返回404
+    if chat_path != '/':
+        return 'Not Found', 404
+    
+    # 生成或获取用户ID
+    if 'user_id' not in session:
+        session['user_id'] = generate_user_id()
+    user_id = session['user_id']
+    
+    # 记录用户信息
+    user = User.query.filter_by(user_id=user_id).first()
+    if not user:
+        user = User(
+            user_id=user_id,
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent')
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        # 用户首次访问，发送打招呼语句
+        welcome_messages = WelcomeMessage.query.order_by(WelcomeMessage.order_index).all()
+        for msg in welcome_messages:
+            welcome_message = Message(
+                user_id=user_id,
+                content=msg.content,
+                is_admin=True,
+                message_type=msg.message_type
+            )
+            db.session.add(welcome_message)
+        db.session.commit()
+    
+    # 获取常见问题
+    common_questions = CommonQuestion.query.all()
+    # 转换为字典列表
+    common_questions_list = [{'id': cq.id, 'question': cq.question, 'answer': cq.content} for cq in common_questions]
+    
+    # 获取系统设置
+    allow_images = get_system_setting('allow_user_images') == 'true'
+    allow_videos = get_system_setting('allow_user_videos') == 'true'
+    
+    return render_template('index.html', user_id=user_id, common_questions=common_questions_list, 
+                           allow_images=allow_images, allow_videos=allow_videos)
+
+@app.route('/<path:path>')
+def custom_path(path):
+    # 获取聊天路径设置
+    chat_path = get_system_setting('chat_path', '/')
+    # 如果当前路径不匹配自定义路径设置，返回404
+    if chat_path == '/' or '/' + path != chat_path:
+        return 'Not Found', 404
+    
     # 生成或获取用户ID
     if 'user_id' not in session:
         session['user_id'] = generate_user_id()
@@ -491,20 +546,24 @@ def admin_settings():
         # 保存设置
         allow_user_images = 'allow_user_images' in request.form
         allow_user_videos = 'allow_user_videos' in request.form
+        chat_path = request.form.get('chat_path', '/')
         
         # 更新或添加系统设置
         update_system_setting('allow_user_images', 'true' if allow_user_images else 'false')
         update_system_setting('allow_user_videos', 'true' if allow_user_videos else 'false')
+        update_system_setting('chat_path', chat_path)
         
         success_message = '设置保存成功！'
     
     # 获取当前设置
     allow_user_images = get_system_setting('allow_user_images') == 'true'
     allow_user_videos = get_system_setting('allow_user_videos') == 'true'
+    chat_path = get_system_setting('chat_path', '/')
     
     return render_template('admin_settings.html', 
                          allow_user_images=allow_user_images, 
                          allow_user_videos=allow_user_videos,
+                         chat_path=chat_path,
                          success_message=success_message)
 
 @app.route('/admin/change_password', methods=['POST'])
