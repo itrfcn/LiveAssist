@@ -124,6 +124,43 @@ def detect_device_type(user_agent):
     else:
         return '其他设备'
 
+# 验证 User Agent 是否正常
+def is_valid_user_agent(user_agent):
+    if not user_agent:
+        return False
+    
+    user_agent_lower = user_agent.lower()
+    
+    # 检查是否启用 User Agent 过滤
+    if get_system_setting('enable_user_agent_filter') != 'true':
+        return True
+    
+    # 获取被阻止的 User Agent 关键词
+    blocked_keywords = get_system_setting('blocked_user_agents', '').split(',')
+    
+    # 检查是否包含被阻止的关键词
+    for keyword in blocked_keywords:
+        keyword = keyword.strip().lower()
+        if keyword and keyword in user_agent_lower:
+            return False
+    
+    # 检查 User Agent 是否太短（少于10个字符，可能是爬虫）
+    if len(user_agent) < 10:
+        return False
+    
+    # 检查是否包含常见的浏览器标识（可选，更严格的验证）
+    # 如果 User Agent 不包含任何常见浏览器标识，可能是爬虫
+    browser_signatures = ['mozilla', 'webkit', 'gecko', 'chrome', 'safari', 'firefox', 'edge', 'opera', 'trident']
+    has_browser_signature = any(sig in user_agent_lower for sig in browser_signatures)
+    
+    # 如果没有浏览器标识，但也不是空字符串，可能需要更严格的检查
+    # 这里我们选择宽松的策略：只要不包含被阻止的关键词，就允许访问
+    # 如果需要更严格的验证，可以取消下面的注释
+    # if not has_browser_signature:
+    #     return False
+    
+    return True
+
 # 获取系统设置
 def get_system_setting(key, default='false'):
     setting = SystemSetting.query.filter_by(key=key).first()
@@ -172,7 +209,9 @@ with app.app_context():
         settings = [
             {'key': 'allow_user_images', 'value': 'true'},
             {'key': 'allow_user_videos', 'value': 'true'},
-            {'key': 'chat_path', 'value': '/'}
+            {'key': 'chat_path', 'value': '/'},
+            {'key': 'enable_user_agent_filter', 'value': 'false'},
+            {'key': 'blocked_user_agents', 'value': 'bot,crawler,spider,scraper,python-requests,curl,wget'}
         ]
         for setting in settings:
             ss = SystemSetting(key=setting['key'], value=setting['value'])
@@ -205,6 +244,11 @@ def index():
     if chat_path != '/':
         return 'Not Found', 404
     
+    # 验证 User Agent
+    user_agent = request.headers.get('User-Agent', '')
+    if not is_valid_user_agent(user_agent):
+        return 'Access Denied: Invalid User Agent', 403
+    
     # 生成或获取用户ID
     if 'user_id' not in session:
         session['user_id'] = generate_user_id()
@@ -216,7 +260,7 @@ def index():
         user = User(
             user_id=user_id,
             ip_address=request.remote_addr,
-            user_agent=request.headers.get('User-Agent')
+            user_agent=user_agent
         )
         db.session.add(user)
         db.session.commit()
@@ -479,6 +523,11 @@ def add_common_question():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    # 验证 User Agent
+    user_agent = request.headers.get('User-Agent', '')
+    if not is_valid_user_agent(user_agent):
+        return jsonify({'status': 'error', 'message': 'Access Denied: Invalid User Agent'}), 403
+    
     if 'file' not in request.files:
         return jsonify({'status': 'error', 'message': 'No file part'})
     
@@ -547,11 +596,15 @@ def admin_settings():
         allow_user_images = 'allow_user_images' in request.form
         allow_user_videos = 'allow_user_videos' in request.form
         chat_path = request.form.get('chat_path', '/')
+        enable_user_agent_filter = 'enable_user_agent_filter' in request.form
+        blocked_user_agents = request.form.get('blocked_user_agents', 'bot,crawler,spider,scraper,python-requests,curl,wget')
         
         # 更新或添加系统设置
         update_system_setting('allow_user_images', 'true' if allow_user_images else 'false')
         update_system_setting('allow_user_videos', 'true' if allow_user_videos else 'false')
         update_system_setting('chat_path', chat_path)
+        update_system_setting('enable_user_agent_filter', 'true' if enable_user_agent_filter else 'false')
+        update_system_setting('blocked_user_agents', blocked_user_agents)
         
         success_message = '设置保存成功！'
     
@@ -559,11 +612,15 @@ def admin_settings():
     allow_user_images = get_system_setting('allow_user_images') == 'true'
     allow_user_videos = get_system_setting('allow_user_videos') == 'true'
     chat_path = get_system_setting('chat_path', '/')
+    enable_user_agent_filter = get_system_setting('enable_user_agent_filter') == 'true'
+    blocked_user_agents = get_system_setting('blocked_user_agents', 'bot,crawler,spider,scraper,python-requests,curl,wget')
     
     return render_template('admin_settings.html', 
                          allow_user_images=allow_user_images, 
                          allow_user_videos=allow_user_videos,
                          chat_path=chat_path,
+                         enable_user_agent_filter=enable_user_agent_filter,
+                         blocked_user_agents=blocked_user_agents,
                          success_message=success_message)
 
 @app.route('/admin/change_password', methods=['POST'])
@@ -920,6 +977,11 @@ def admin_send_message():
 # 修改send_message函数，使用WebSocket通知
 @app.route('/send_message', methods=['POST'])
 def send_message():
+    # 验证 User Agent
+    user_agent = request.headers.get('User-Agent', '')
+    if not is_valid_user_agent(user_agent):
+        return jsonify({'status': 'error', 'message': 'Access Denied: Invalid User Agent'}), 403
+    
     user_id = request.json.get('user_id')
     content = request.json.get('content')
     message_type = request.json.get('message_type', 'text')

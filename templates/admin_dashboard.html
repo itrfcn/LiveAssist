@@ -195,7 +195,7 @@
                         <td>{{ user.user_id }}</td>
                         <td>{{ user.alias or '-' }}</td>
                         <td>{{ user.ip_address }}</td>
-                        <td style="cursor: pointer;" title="{{ user.user_agent }}" onclick="alert('{{ user.user_agent }}')">{{ user.user_agent[:50] }}{% if user.user_agent|length > 50 %}...{% endif %}</td>
+                        <td style="cursor: pointer;" title="{{ user.user_agent or '' }}" onclick="showUserAgentModal({{ (user.user_agent or '') | tojson }})">{{ (user.user_agent or '')[:50] }}{% if (user.user_agent or '')|length > 50 %}...{% endif %}</td>
                         <td>{{ item.device_type }}</td>
                         <td>{{ (user.remark[:30] if user.remark else '-') }}{% if user.remark and user.remark|length > 30 %}...{% endif %}</td>
                         <td>{{ item.latest_message_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
@@ -227,6 +227,20 @@
             <div style="text-align: right; margin-top: 20px;">
                 <button onclick="saveUserInfo()" style="padding: 8px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">保存</button>
                 <button onclick="closeEditModal()" style="padding: 8px 16px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Agent 显示模态框 -->
+    <div id="userAgentModal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgb(0,0,0); background-color: rgba(0,0,0,0.4);">
+        <div style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 600px; border-radius: 8px;">
+            <h2>User Agent 信息</h2>
+            <div style="margin: 15px 0;">
+                <label>完整 User Agent：</label>
+                <textarea id="userAgentContent" readonly style="width: 100%; padding: 8px; height: 150px; background-color: #f5f5f5; font-family: monospace;"></textarea>
+            </div>
+            <div style="text-align: right; margin-top: 20px;">
+                <button onclick="closeUserAgentModal()" style="padding: 8px 16px; background-color: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer;">关闭</button>
             </div>
         </div>
     </div>
@@ -270,6 +284,17 @@
         // 关闭编辑模态框
         function closeEditModal() {
             document.getElementById('editModal').style.display = 'none';
+        }
+        
+        // 显示 User Agent 模态框
+        function showUserAgentModal(userAgent) {
+            document.getElementById('userAgentContent').value = userAgent || '';
+            document.getElementById('userAgentModal').style.display = 'block';
+        }
+        
+        // 关闭 User Agent 模态框
+        function closeUserAgentModal() {
+            document.getElementById('userAgentModal').style.display = 'none';
         }
         
         // 保存用户信息
@@ -325,7 +350,7 @@
                                 <td>${escapeHtml(user.user_id)}</td>
                                 <td>${escapeHtml(user.alias) || '-'}</td>
                                 <td>${escapeHtml(user.ip_address)}</td>
-                                <td style="cursor: pointer;" title="${escapeHtml(user.user_agent)}" onclick="alert('${escapeHtml(user.user_agent)}')">${escapeHtml(user.user_agent.substring(0, 50))}${user.user_agent.length > 50 ? '...' : ''}</td>
+                                <td style="cursor: pointer;" title="${escapeHtml(user.user_agent)}" onclick="showUserAgentModal('${escapeHtml(user.user_agent)}')">${escapeHtml(user.user_agent.substring(0, 50))}${user.user_agent.length > 50 ? '...' : ''}</td>
                                 <td>${escapeHtml(user.device_type)}</td>
                                 <td>${user.remark ? escapeHtml(user.remark.substring(0, 30)) : '-'}${user.remark && user.remark.length > 30 ? '...' : ''}</td>
                                 <td>${escapeHtml(user.latest_message_time)}</td>

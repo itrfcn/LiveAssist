@@ -218,6 +218,29 @@
         </div>
         
         <div class="section">
+            <h2>User Agent 过滤设置</h2>
+            <form action="/admin/settings" method="POST">
+                <div class="setting-item">
+                    <div class="setting-label">启用 User Agent 过滤</div>
+                    <div class="setting-control">
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="enable_user_agent_filter" {% if enable_user_agent_filter %}checked{% endif %}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <div class="setting-label" style="margin-bottom: 5px;">被阻止的 User Agent 关键词（用逗号分隔）</div>
+                    <input type="text" name="blocked_user_agents" value="{{ blocked_user_agents }}" style="width: 100%; padding: 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px;" placeholder="bot,crawler,spider,scraper">
+                    <div style="font-size: 12px; color: #999; margin-top: 5px;">包含这些关键词的 User Agent 将被拒绝访问</div>
+                </div>
+                
+                <button type="submit" class="save-button">保存设置</button>
+            </form>
+        </div>
+        
+        <div class="section">
             <h2>管理员密码设置</h2>
             <form action="/admin/change_password" method="POST">
                 <div style="margin-bottom: 15px;">
