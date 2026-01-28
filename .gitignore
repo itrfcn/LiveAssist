@@ -6,6 +6,9 @@ instance/*
 uploads/*
 !uploads/.gitkeep
 
+# 分片上传临时文件
+temp_chunks/*
+!temp_chunks/.gitkeep
 # 虚拟环境
 venv/
 env/

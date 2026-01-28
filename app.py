@@ -6,6 +6,7 @@ from datetime import datetime
 import random
 import string
 import os
+import json
 from werkzeug.security import generate_password_hash, check_password_hash
 from PIL import Image, ImageDraw, ImageFont
 import io
@@ -22,6 +23,7 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov', 'avi', 'wmv'}
 app.config['RESET_DATABASE_ON_RESTART'] = True  # 控制重启程序是否重置数据库
+app.config['CHUNK_UPLOAD_FOLDER'] = 'temp_chunks'  # 分片临时存储目录
 
 db = SQLAlchemy(app)
 
@@ -230,6 +232,10 @@ with app.app_context():
     else:
         # 只创建表，不删除已有数据
         db.create_all()
+    
+    # 创建分片上传临时目录
+    if not os.path.exists(app.config['CHUNK_UPLOAD_FOLDER']):
+        os.makedirs(app.config['CHUNK_UPLOAD_FOLDER'])
 
 # 路由
 @app.route('/uploads/<filename>')
@@ -558,6 +564,160 @@ def upload_file():
     
     return jsonify({'status': 'error', 'message': 'File type not allowed'})
 
+@app.route('/upload_chunk', methods=['POST'])
+def upload_chunk():
+    # 验证 User Agent
+    user_agent = request.headers.get('User-Agent', '')
+    if not is_valid_user_agent(user_agent):
+        return jsonify({'status': 'error', 'message': 'Access Denied: Invalid User Agent'}), 403
+    
+    if 'file' not in request.files:
+        return jsonify({'status': 'error', 'message': 'No file part'})
+    
+    file = request.files['file']
+    file_id = request.form.get('fileId')
+    chunk_index = int(request.form.get('chunkIndex'))
+    total_chunks = int(request.form.get('totalChunks'))
+    file_name = request.form.get('fileName')
+    
+    if not file_id or not file_name:
+        return jsonify({'status': 'error', 'message': 'Missing required parameters'})
+    
+    # 创建临时分片目录
+    chunk_dir = os.path.join(app.config['CHUNK_UPLOAD_FOLDER'], file_id)
+    if not os.path.exists(chunk_dir):
+        os.makedirs(chunk_dir)
+    
+    # 保存分片
+    chunk_filename = f"chunk_{chunk_index}"
+    chunk_path = os.path.join(chunk_dir, chunk_filename)
+    file.save(chunk_path)
+    
+    # 保存元数据
+    metadata = {
+        'fileId': file_id,
+        'fileName': file_name,
+        'fileSize': request.form.get('fileSize'),
+        'fileType': request.form.get('fileType'),
+        'totalChunks': total_chunks,
+        'uploadedChunks': len([f for f in os.listdir(chunk_dir) if f.startswith('chunk_')])
+    }
+    
+    metadata_path = os.path.join(chunk_dir, 'metadata.json')
+    with open(metadata_path, 'w') as f:
+        json.dump(metadata, f)
+    
+    return jsonify({'status': 'success', 'chunkIndex': chunk_index})
+
+@app.route('/merge_chunks', methods=['POST'])
+def merge_chunks():
+    # 验证 User Agent
+    user_agent = request.headers.get('User-Agent', '')
+    if not is_valid_user_agent(user_agent):
+        return jsonify({'status': 'error', 'message': 'Access Denied: Invalid User Agent'}), 403
+    
+    data = request.json
+    file_id = data.get('fileId')
+    total_chunks = data.get('totalChunks')
+    file_name = data.get('fileName')
+    file_type = data.get('fileType')
+    
+    if not file_id or not total_chunks or not file_name:
+        return jsonify({'status': 'error', 'message': 'Missing required parameters'})
+    
+    chunk_dir = os.path.join(app.config['CHUNK_UPLOAD_FOLDER'], file_id)
+    
+    # 检查所有分片是否都已上传
+    uploaded_chunks = len([f for f in os.listdir(chunk_dir) if f.startswith('chunk_')])
+    if uploaded_chunks != total_chunks:
+        return jsonify({'status': 'error', 'message': f'Not all chunks uploaded ({uploaded_chunks}/{total_chunks})'})
+    
+    # 检查文件类型是否允许
+    ext = file_name.rsplit('.', 1)[1].lower()
+    if not allowed_file(file_name):
+        return jsonify({'status': 'error', 'message': 'File type not allowed'})
+    
+    # 检查用户是否可以上传文件
+    allow_images = get_system_setting('allow_user_images') == 'true'
+    allow_videos = get_system_setting('allow_user_videos') == 'true'
+    
+    if (ext in ['png', 'jpg', 'jpeg', 'gif'] and not allow_images) or \
+       (ext in ['mp4', 'mov', 'avi', 'wmv'] and not allow_videos):
+        return jsonify({'status': 'error', 'message': 'File type not allowed'})
+    
+    # 生成最终文件名
+    final_filename = generate_unique_filename(file_name)
+    final_path = os.path.join(app.config['UPLOAD_FOLDER'], final_filename)
+    
+    # 合并分片
+    try:
+        with open(final_path, 'wb') as outfile:
+            for i in range(total_chunks):
+                chunk_path = os.path.join(chunk_dir, f'chunk_{i}')
+                with open(chunk_path, 'rb') as infile:
+                    outfile.write(infile.read())
+        
+        # 清理临时分片
+        import shutil
+        shutil.rmtree(chunk_dir)
+        
+        # 确定消息类型
+        message_type = 'image' if ext in ['png', 'jpg', 'jpeg', 'gif'] else 'video'
+        
+        return jsonify({'status': 'success', 'filename': final_filename, 'message_type': message_type})
+    
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'Merge failed: {str(e)}'})
+
+@app.route('/check_upload_status', methods=['POST'])
+def check_upload_status():
+    # 验证 User Agent
+    user_agent = request.headers.get('User-Agent', '')
+    if not is_valid_user_agent(user_agent):
+        return jsonify({'status': 'error', 'message': 'Access Denied: Invalid User Agent'}), 403
+    
+    data = request.json
+    file_id = data.get('fileId')
+    
+    if not file_id:
+        return jsonify({'status': 'error', 'message': 'Missing file ID'})
+    
+    chunk_dir = os.path.join(app.config['CHUNK_UPLOAD_FOLDER'], file_id)
+    
+    if not os.path.exists(chunk_dir):
+        return jsonify({'status': 'not_found', 'uploadedChunks': 0})
+    
+    metadata_path = os.path.join(chunk_dir, 'metadata.json')
+    if os.path.exists(metadata_path):
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+        return jsonify({'status': 'success', **metadata})
+    else:
+        uploaded_chunks = len([f for f in os.listdir(chunk_dir) if f.startswith('chunk_')])
+        return jsonify({'status': 'success', 'uploadedChunks': uploaded_chunks})
+
+@app.route('/delete_chunks', methods=['POST'])
+def delete_chunks():
+    # 验证 User Agent
+    user_agent = request.headers.get('User-Agent', '')
+    if not is_valid_user_agent(user_agent):
+        return jsonify({'status': 'error', 'message': 'Access Denied: Invalid User Agent'}), 403
+    
+    data = request.json
+    file_id = data.get('fileId')
+    
+    if not file_id:
+        return jsonify({'status': 'error', 'message': 'Missing file ID'})
+    
+    chunk_dir = os.path.join(app.config['CHUNK_UPLOAD_FOLDER'], file_id)
+    
+    if os.path.exists(chunk_dir):
+        import shutil
+        shutil.rmtree(chunk_dir)
+        return jsonify({'status': 'success'})
+    else:
+        return jsonify({'status': 'error', 'message': 'Chunks not found'})
+
 @app.route('/admin/upload', methods=['POST'])
 def admin_upload_file():
     if 'admin_logged_in' not in session or not session['admin_logged_in']:
@@ -583,6 +743,99 @@ def admin_upload_file():
         return jsonify({'status': 'success', 'filename': filename, 'message_type': message_type})
     
     return jsonify({'status': 'error', 'message': 'File type not allowed'})
+
+@app.route('/admin/upload_chunk', methods=['POST'])
+def admin_upload_chunk():
+    if 'admin_logged_in' not in session or not session['admin_logged_in']:
+        return jsonify({'status': 'error', 'message': 'Unauthorized'})
+    
+    if 'file' not in request.files:
+        return jsonify({'status': 'error', 'message': 'No file part'})
+    
+    file = request.files['file']
+    file_id = request.form.get('fileId')
+    chunk_index = int(request.form.get('chunkIndex'))
+    total_chunks = int(request.form.get('totalChunks'))
+    file_name = request.form.get('fileName')
+    
+    if not file_id or not file_name:
+        return jsonify({'status': 'error', 'message': 'Missing required parameters'})
+    
+    # 创建临时分片目录
+    chunk_dir = os.path.join(app.config['CHUNK_UPLOAD_FOLDER'], file_id)
+    if not os.path.exists(chunk_dir):
+        os.makedirs(chunk_dir)
+    
+    # 保存分片
+    chunk_filename = f"chunk_{chunk_index}"
+    chunk_path = os.path.join(chunk_dir, chunk_filename)
+    file.save(chunk_path)
+    
+    # 保存元数据
+    metadata = {
+        'fileId': file_id,
+        'fileName': file_name,
+        'fileSize': request.form.get('fileSize'),
+        'fileType': request.form.get('fileType'),
+        'totalChunks': total_chunks,
+        'uploadedChunks': len([f for f in os.listdir(chunk_dir) if f.startswith('chunk_')])
+    }
+    
+    metadata_path = os.path.join(chunk_dir, 'metadata.json')
+    with open(metadata_path, 'w') as f:
+        json.dump(metadata, f)
+    
+    return jsonify({'status': 'success', 'chunkIndex': chunk_index})
+
+@app.route('/admin/merge_chunks', methods=['POST'])
+def admin_merge_chunks():
+    if 'admin_logged_in' not in session or not session['admin_logged_in']:
+        return jsonify({'status': 'error', 'message': 'Unauthorized'})
+    
+    data = request.json
+    file_id = data.get('fileId')
+    total_chunks = data.get('totalChunks')
+    file_name = data.get('fileName')
+    file_type = data.get('fileType')
+    
+    if not file_id or not total_chunks or not file_name:
+        return jsonify({'status': 'error', 'message': 'Missing required parameters'})
+    
+    chunk_dir = os.path.join(app.config['CHUNK_UPLOAD_FOLDER'], file_id)
+    
+    # 检查所有分片是否都已上传
+    uploaded_chunks = len([f for f in os.listdir(chunk_dir) if f.startswith('chunk_')])
+    if uploaded_chunks != total_chunks:
+        return jsonify({'status': 'error', 'message': f'Not all chunks uploaded ({uploaded_chunks}/{total_chunks})'})
+    
+    # 检查文件类型是否允许
+    if not allowed_file(file_name):
+        return jsonify({'status': 'error', 'message': 'File type not allowed'})
+    
+    # 生成最终文件名
+    final_filename = generate_unique_filename(file_name)
+    final_path = os.path.join(app.config['UPLOAD_FOLDER'], final_filename)
+    
+    # 合并分片
+    try:
+        with open(final_path, 'wb') as outfile:
+            for i in range(total_chunks):
+                chunk_path = os.path.join(chunk_dir, f'chunk_{i}')
+                with open(chunk_path, 'rb') as infile:
+                    outfile.write(infile.read())
+        
+        # 清理临时分片
+        import shutil
+        shutil.rmtree(chunk_dir)
+        
+        # 确定消息类型
+        ext = file_name.rsplit('.', 1)[1].lower()
+        message_type = 'image' if ext in ['png', 'jpg', 'jpeg', 'gif'] else 'video'
+        
+        return jsonify({'status': 'success', 'filename': final_filename, 'message_type': message_type})
+    
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'Merge failed: {str(e)}'})
 
 @app.route('/admin/settings', methods=['GET', 'POST'])
 def admin_settings():
@@ -683,23 +936,16 @@ def admin_welcome_messages():
                     db.session.add(welcome_message)
                     db.session.commit()
             else:
-                # 处理图片和视频
-                if 'file' in request.files:
-                    file = request.files['file']
-                    if file and file.filename:
-                        if allowed_file(file.filename):
-                            # 生成唯一文件名
-                            filename = generate_unique_filename(file.filename)
-                            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                            file.save(filepath)
-                            
-                            welcome_message = WelcomeMessage(
-                                content=filename,
-                                message_type=message_type,
-                                order_index=order_index
-                            )
-                            db.session.add(welcome_message)
-                            db.session.commit()
+                # 处理图片和视频 - 使用分片上传的文件名
+                uploaded_filename = request.form.get('uploaded_filename')
+                if uploaded_filename and allowed_file(uploaded_filename):
+                    welcome_message = WelcomeMessage(
+                        content=uploaded_filename,
+                        message_type=message_type,
+                        order_index=order_index
+                    )
+                    db.session.add(welcome_message)
+                    db.session.commit()
     
     # 获取所有打招呼语句，按排序索引排序
     welcome_messages = WelcomeMessage.query.order_by(WelcomeMessage.order_index).all()
@@ -990,6 +1236,19 @@ def send_message():
     message = send_message_with_notification(user_id, content, message_type, is_admin=False)
     
     return jsonify({'status': 'success'})
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return 'Not Found', 404
+
+@app.errorhandler(403)
+def forbidden_error(error):
+    return 'Access Denied', 403
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return 'Internal Server Error', 500
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
