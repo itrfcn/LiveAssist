@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_wtf.csrf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
 from datetime import datetime
 import random
@@ -13,6 +14,9 @@ import io
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
+app.config['WTF_CSRF_TIME_LIMIT'] = None
+app.config['WTF_CSRF_ENABLED'] = True
+csrf = CSRFProtect(app)
 # 配置信任代理，用于在宝塔等反向代理后面获取真实用户IP
 app.config['TRAP_HTTP_EXCEPTIONS'] = True
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -344,6 +348,7 @@ def custom_path(path):
                            allow_images=allow_images, allow_videos=allow_videos)
 
 @app.route('/get_messages', methods=['POST'])
+@csrf.exempt
 def get_messages():
     user_id = request.json.get('user_id')
     messages = Message.query.filter_by(user_id=user_id).order_by(Message.created_at).all()
@@ -565,6 +570,7 @@ def upload_file():
     return jsonify({'status': 'error', 'message': 'File type not allowed'})
 
 @app.route('/upload_chunk', methods=['POST'])
+@csrf.exempt
 def upload_chunk():
     # 验证 User Agent
     user_agent = request.headers.get('User-Agent', '')
@@ -610,6 +616,7 @@ def upload_chunk():
     return jsonify({'status': 'success', 'chunkIndex': chunk_index})
 
 @app.route('/merge_chunks', methods=['POST'])
+@csrf.exempt
 def merge_chunks():
     # 验证 User Agent
     user_agent = request.headers.get('User-Agent', '')
@@ -670,6 +677,7 @@ def merge_chunks():
         return jsonify({'status': 'error', 'message': f'Merge failed: {str(e)}'})
 
 @app.route('/check_upload_status', methods=['POST'])
+@csrf.exempt
 def check_upload_status():
     # 验证 User Agent
     user_agent = request.headers.get('User-Agent', '')
@@ -697,6 +705,7 @@ def check_upload_status():
         return jsonify({'status': 'success', 'uploadedChunks': uploaded_chunks})
 
 @app.route('/delete_chunks', methods=['POST'])
+@csrf.exempt
 def delete_chunks():
     # 验证 User Agent
     user_agent = request.headers.get('User-Agent', '')
@@ -745,6 +754,7 @@ def admin_upload_file():
     return jsonify({'status': 'error', 'message': 'File type not allowed'})
 
 @app.route('/admin/upload_chunk', methods=['POST'])
+@csrf.exempt
 def admin_upload_chunk():
     if 'admin_logged_in' not in session or not session['admin_logged_in']:
         return jsonify({'status': 'error', 'message': 'Unauthorized'})
@@ -788,6 +798,7 @@ def admin_upload_chunk():
     return jsonify({'status': 'success', 'chunkIndex': chunk_index})
 
 @app.route('/admin/merge_chunks', methods=['POST'])
+@csrf.exempt
 def admin_merge_chunks():
     if 'admin_logged_in' not in session or not session['admin_logged_in']:
         return jsonify({'status': 'error', 'message': 'Unauthorized'})
@@ -971,6 +982,7 @@ def delete_welcome_message(id):
     return redirect('/admin/welcome_messages')
 
 @app.route('/admin/update_setting', methods=['POST'])
+@csrf.exempt
 def update_setting():
     if 'admin_logged_in' not in session or not session['admin_logged_in']:
         return jsonify({'status': 'error', 'message': 'Unauthorized'})
@@ -1207,6 +1219,7 @@ def notify_admin_update():
 
 # 修改admin_send_message函数，使用WebSocket通知
 @app.route('/admin/send_message', methods=['POST'])
+@csrf.exempt
 def admin_send_message():
     if 'admin_logged_in' not in session or not session['admin_logged_in']:
         return jsonify({'status': 'error'})
@@ -1222,6 +1235,7 @@ def admin_send_message():
 
 # 修改send_message函数，使用WebSocket通知
 @app.route('/send_message', methods=['POST'])
+@csrf.exempt
 def send_message():
     # 验证 User Agent
     user_agent = request.headers.get('User-Agent', '')

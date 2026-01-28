@@ -16,11 +16,11 @@
 
 #### 管理员端功能
 - 用户管理：查看、管理所有用户的聊天记录
-- 消息回复：回复用户消息，支持文本、图片、视频
+- 消息回复：回复用户消息，支持文本、图片、视频，带上传进度条
 - 关键词自动回复：设置关键词及其对应的自动回复内容
 - 常见问题设置：管理常见问题及其答案
 - 打招呼语句设置：设置用户首次访问时的欢迎消息
-- 系统设置：管理用户文件上传权限、自定义聊天路径
+- 系统设置：管理用户文件上传权限、自定义聊天路径、User Agent过滤
 - 密码修改：修改管理员密码
 
 ## 2. 技术架构
@@ -29,15 +29,17 @@
 
 | 类别 | 技术/框架 | 版本 | 用途 |
 |------|-----------|------|------|
-| 后端 | Flask | 最新版 | Web框架，处理HTTP请求 |
-| 后端 | Flask-SocketIO | 最新版 | WebSocket支持，实现实时通信 |
-| 后端 | SQLAlchemy | 最新版 | ORM框架，处理数据库操作 |
+| 后端 | Flask | 3.1.2 | Web框架，处理HTTP请求 |
+| 后端 | Flask-SQLAlchemy | 3.1.1 | ORM框架，处理数据库操作 |
+| 后端 | Flask-SocketIO | 5.6.0 | WebSocket支持，实现实时通信 |
+| 后端 | Flask-WTF | 1.2.2 | CSRF保护 |
+| 后端 | SQLAlchemy | 3.1.1 | ORM框架，处理数据库操作 |
 | 后端 | SQLite | 内置 | 轻量级数据库，存储系统数据 |
 | 前端 | HTML5 | 最新版 | 页面结构 |
 | 前端 | CSS3 | 最新版 | 页面样式 |
 | 前端 | JavaScript | ES6+ | 前端交互逻辑 |
 | 前端 | Socket.IO | 4.5.0 | WebSocket客户端库 |
-| 安全 | Werkzeug | 最新版 | 密码哈希、安全工具 |
+| 安全 | Werkzeug | 3.1.5 | 密码哈希、安全工具 |
 
 ### 2.2 系统架构
 
@@ -109,6 +111,9 @@
 
 - **文件类型**：支持图片（png, jpg, jpeg, gif）和视频（mp4, mov, avi, wmv）
 - **文件验证**：验证文件类型和大小
+- **分片上传**：支持大文件分片上传，提高上传成功率
+- **上传进度**：实时显示上传进度条，支持取消上传
+- **断点续传**：支持断点续传功能，网络中断后可继续上传
 - **文件存储**：将文件存储到uploads目录
 - **文件访问**：通过URL访问上传的文件
 
@@ -116,6 +121,7 @@
 
 - **文件上传权限**：控制用户是否可以上传图片和视频
 - **自定义聊天路径**：设置自定义的聊天访问路径（如/abc、/chat等）
+- **User Agent过滤**：根据User Agent过滤非正常用户请求
 - **管理员密码**：修改管理员登录密码
 - **数据库重置**：控制重启程序是否重置数据库
 
@@ -134,6 +140,8 @@
 - **SQL注入防护**：使用SQLAlchemy ORM，避免直接拼接SQL语句
 - **文件上传安全**：验证文件类型和大小，防止恶意文件上传
 - **权限控制**：管理员操作需要登录验证
+- **CSRF保护**：使用Flask-WTF实现CSRF保护，防止跨站请求伪造
+- **User Agent验证**：根据User Agent过滤非正常用户请求
 
 ### 5.2 前端安全
 
@@ -227,6 +235,14 @@
 5. 访问自定义路径即可看到聊天界面
 6. 注意：如果设置了自定义路径，根路径/将返回404错误
 
+#### 启用User Agent过滤
+1. 登录管理员后台
+2. 点击左侧菜单中的"系统设置"
+3. 勾选"启用User Agent过滤"
+4. 在"过滤关键词"输入框中输入需要过滤的关键词（如：bot,crawler,spider）
+5. 点击"保存设置"按钮
+6. 系统将根据User Agent中包含的关键词过滤非正常用户请求
+
 
 ## 8. 故障排除
 
@@ -247,6 +263,8 @@ Flask应用默认在控制台输出日志信息，生产环境建议配置详细
 
 | 版本 | 日期 | 主要变更 |
 |------|------|----------|
+| v1.3 | 2026-01-28 | 添加文件分片上传、上传进度条、断点续传功能；实现CSRF保护；添加User Agent过滤功能；优化管理员回复界面 |
+| v1.2 | 2026-01-26 | 添加404异常处理；优化管理员页面header样式 |
 | v1.1 | 2026-01-24 | 添加WebSocket实时通信功能、自定义聊天路径功能 |
 | v1.0 | 2026-01-21 | 初始版本发布 |
 
@@ -326,6 +344,10 @@ Flask应用默认在控制台输出日志信息，生产环境建议配置详细
 | /get_messages | POST | 获取用户的所有消息 | user_id: 用户ID | JSON格式的消息列表 |
 | /send_message | POST | 发送消息 | user_id: 用户ID, content: 消息内容, message_type: 消息类型 | {"status": "success"} |
 | /upload | POST | 上传文件 | file: 文件 | {"status": "success", "filename": "文件名", "message_type": "消息类型"} |
+| /upload_chunk | POST | 分片上传文件 | file: 文件分片, fileId: 文件ID, chunkIndex: 分片索引, totalChunks: 总分片数, fileName: 文件名, fileSize: 文件大小, fileType: 文件类型 | {"status": "success", "chunkIndex": 分片索引} |
+| /merge_chunks | POST | 合并文件分片 | fileId: 文件ID, totalChunks: 总分片数, fileName: 文件名, fileType: 文件类型 | {"status": "success", "filename": "文件名", "message_type": "消息类型"} |
+| /check_upload_status | POST | 检查上传状态 | fileId: 文件ID | {"status": "success", "uploadedChunks": 已上传分片数, "totalChunks": 总分片数} |
+| /delete_chunks | POST | 删除文件分片 | fileId: 文件ID | {"status": "success"} |
 
 #### 管理员端接口
 
@@ -338,6 +360,8 @@ Flask应用默认在控制台输出日志信息，生产环境建议配置详细
 | /admin/chat/<user_id> | GET | 与指定用户聊天 | user_id: 用户ID | HTML页面 |
 | /admin/send_message | POST | 管理员发送消息 | user_id: 用户ID, content: 消息内容, message_type: 消息类型 | {"status": "success"} |
 | /admin/upload | POST | 管理员上传文件 | file: 文件 | {"status": "success", "filename": "文件名", "message_type": "消息类型"} |
+| /admin/upload_chunk | POST | 管理员分片上传文件 | file: 文件分片, fileId: 文件ID, chunkIndex: 分片索引, totalChunks: 总分片数, fileName: 文件名, fileSize: 文件大小, fileType: 文件类型 | {"status": "success", "chunkIndex": 分片索引} |
+| /admin/merge_chunks | POST | 管理员合并文件分片 | fileId: 文件ID, totalChunks: 总分片数, fileName: 文件名, fileType: 文件类型 | {"status": "success", "filename": "文件名", "message_type": "消息类型"} |
 | /admin/auto_replies | GET | 关键词自动回复设置页面 | 无 | HTML页面 |
 | /admin/add_auto_reply | POST | 添加关键词自动回复 | keyword: 关键词, content: 回复内容, message_type: 消息类型, order_index: 排序索引 | {"status": "success"} |
 | /admin/delete_auto_reply/<id> | GET | 删除关键词自动回复 | id: 自动回复ID | 重定向到自动回复设置页面 |
@@ -381,7 +405,7 @@ Flask应用默认在控制台输出日志信息，生产环境建议配置详细
    - 添加缓存机制，减少数据库查询
 
 4. **安全优化**
-   - 实现CSRF保护
+   - 实现CSRF保护（已实现）
    - 添加请求频率限制，防止暴力攻击
    - 定期备份数据库
 
@@ -396,6 +420,6 @@ Flask应用默认在控制台输出日志信息，生产环境建议配置详细
 
 系统采用Flask框架开发，结构清晰，代码简洁，易于维护和扩展。通过实施多种安全措施，确保了系统的安全性和可靠性。
 
-最新版本（v1.1）添加了WebSocket实时通信功能，实现了真正的实时消息推送和用户列表更新，无需轮询，大大提高了系统性能和用户体验。同时，系统还支持自定义聊天路径功能，管理员可以灵活设置聊天界面的访问路径。
+最新版本（v1.3）添加了文件分片上传、上传进度条和断点续传功能，解决了大文件上传的问题；实现了CSRF保护，提高了系统的安全性；添加了User Agent过滤功能，可以有效过滤非正常用户请求；优化了管理员回复界面，支持上传进度条，提升了用户体验。
 
 未来，系统可以通过添加更多功能，如多语言支持、消息统计分析、客服满意度评价等，进一步提升系统的实用性和用户体验。

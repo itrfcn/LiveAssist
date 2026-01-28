@@ -88,6 +88,7 @@
     <div class="login-container">
         <h2>管理员登录</h2>
         <form action="/admin/login" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="username">用户名</label>
                 <input type="text" id="username" name="username" required>
